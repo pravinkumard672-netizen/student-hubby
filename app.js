@@ -4,7 +4,7 @@
 
   /* ---------- Class data: Major -> Degree -> Semesters / Subjects ---------- */
   var MAJORS = {
-    "Computer Science": ["B.Tech", "B.Sc", "BCA", "M.Tech", "MCA"],
+    "Computer Science": ["B.Tech", "B.Sc", "BCA", "M.Tech", "MCA"]
     "Electronics": ["B.Tech", "B.Sc", "M.Tech"],
     "Mechanical": ["B.Tech", "M.Tech"],
     "Civil": ["B.Tech", "M.Tech"],
