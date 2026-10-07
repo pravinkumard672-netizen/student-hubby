@@ -4,7 +4,7 @@
 
   /* ---------- Class data: Major -> Degree -> Semesters / Subjects ---------- */
   var MAJORS = {
-    "Computer Science": ["B.Tech", "B.Sc", "BCA", "M.Tech", "MCA"]
+    "Computer Science": ["B.Tech", "B.Sc", "BCA", "M.Tech", "MCA"],
     "Electronics": ["B.Tech", "B.Sc", "M.Tech"],
     "Mechanical": ["B.Tech", "M.Tech"],
     "Civil": ["B.Tech", "M.Tech"],
@@ -49,39 +49,109 @@
   }
   function semLabel(n) { return "Semester " + n; }
 
-  /* ---------- IndexedDB ---------- */
-  var dbPromise = null;
-  function openDB() {
-    if (dbPromise) return dbPromise;
-    dbPromise = new Promise(function (resolve, reject) {
-      if (!window.indexedDB) { reject(new Error("This browser does not support saving files. Try Chrome, Edge or Firefox (not private mode).")); return; }
-      var req;
-      try { req = indexedDB.open("campusvault", 1); } catch (e) { reject(e); return; }
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains("papers")) db.createObjectStore("papers", { keyPath: "id", autoIncrement: true });
+  /* ---------- Supabase ---------- */
+  var SUPABASE_URL = "https://sxnnonmjzeaaxtbqocar.supabase.co";
+  var SUPABASE_KEY = "sb_publishable_adyyTHY6vJpynxYZqpqbuA_wzvuGZio";
+  var SUPABASE_BUCKET = "papers";
+  var supabaseClient = null;
+
+  function loadSupabase() {
+    if (window.supabase && window.supabase.createClient) {
+      supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      return Promise.resolve(supabaseClient);
+    }
+
+    return new Promise(function (resolve, reject) {
+      var script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+      script.onload = function () {
+        try {
+          if (!window.supabase || !window.supabase.createClient) {
+            reject(new Error("Supabase library could not be loaded."));
+            return;
+          }
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+          resolve(supabaseClient);
+        } catch (e) {
+          reject(e);
+        }
       };
-      req.onsuccess = function () { resolve(req.result); };
-      req.onerror = function () { reject(req.error || new Error("Could not open storage.")); };
-      req.onblocked = function () { reject(new Error("Storage is blocked. Close other tabs of this site and retry.")); };
+      script.onerror = function () {
+        reject(new Error("Could not load Supabase. Check your internet connection."));
+      };
+      document.head.appendChild(script);
     });
-    return dbPromise;
   }
-  function tx(mode, fn) {
-    return openDB().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var t = db.transaction("papers", mode);
-        var store = t.objectStore("papers");
-        var result = fn(store);
-        t.oncomplete = function () { resolve(result && result.result !== undefined ? result.result : undefined); };
-        t.onerror = function () { reject(t.error); };
-        t.onabort = function () { reject(t.error || new Error("Save failed (storage may be full).")); };
+
+  function addPaper(p) {
+    return loadSupabase().then(function (sb) {
+      var safeName = p.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+      var path = Date.now() + "-" + Math.random().toString(36).slice(2) + "-" + safeName;
+
+      return sb.storage.from(SUPABASE_BUCKET).upload(path, p.blob, {
+        contentType: p.type,
+        upsert: false
+      }).then(function (uploadResult) {
+        if (uploadResult.error) throw uploadResult.error;
+
+        var row = {
+          major: p.major,
+          degree: p.degree,
+          semester: p.semester,
+          subject: p.subject,
+          year: p.year,
+          title: p.title,
+          file_path: path,
+          file_name: p.fileName,
+          file_type: p.type,
+          file_size: p.size
+        };
+
+        return sb.from("papers").insert(row).select().single().then(function (dbResult) {
+          if (dbResult.error) throw dbResult.error;
+          return dbResult.data;
+        });
       });
     });
   }
-  function addPaper(p) { return tx("readwrite", function (s) { return s.add(p); }); }
-  function deletePaper(id) { return tx("readwrite", function (s) { return s.delete(id); }); }
-  function allPapers() { return tx("readonly", function (s) { return s.getAll(); }); }
+
+  function deletePaper(id, filePath) {
+    return loadSupabase().then(function (sb) {
+      return sb.from("papers").delete().eq("id", id).then(function (dbResult) {
+        if (dbResult.error) throw dbResult.error;
+
+        // File deletion requires a storage DELETE policy. If none exists,
+        // the database row is still deleted and the file can be removed
+        // later from Supabase Storage by the project owner.
+        return dbResult;
+      });
+    });
+  }
+
+  function allPapers() {
+    return loadSupabase().then(function (sb) {
+      return sb.from("papers").select("*").order("created_at", { ascending: false }).then(function (result) {
+        if (result.error) throw result.error;
+        return (result.data || []).map(function (p) {
+          var publicResult = sb.storage.from(SUPABASE_BUCKET).getPublicUrl(p.file_path);
+          return {
+            id: p.id,
+            major: p.major,
+            degree: p.degree,
+            semester: p.semester,
+            subject: p.subject,
+            year: p.year,
+            title: p.title,
+            fileName: p.file_name,
+            type: p.file_type,
+            size: p.file_size,
+            url: publicResult.data.publicUrl,
+            added: new Date(p.created_at).getTime()
+          };
+        });
+      });
+    });
+  }
 
   /* ---------- Cascading pickers ---------- */
   function wirePickers(opts) {
@@ -133,9 +203,9 @@
       addPaper({
         major: major, degree: degree, semester: parseInt(sem, 10), subject: subject, year: year,
         title: title, fileName: file.name, type: file.type, size: file.size,
-        blob: file, added: Date.now()
+        blob: file
       }).then(function () {
-        show("Paper uploaded. You can find it on the Browse page.", "ok");
+        show("Paper uploaded to Supabase. You can find it on the Browse page.", "ok");
         form.reset(); yr.value = thisYear;
         fill($("degree"), [], "Select degree"); fill($("subject"), [], "Select subject");
       }).catch(function (err) {
@@ -151,7 +221,7 @@
     var papers = [];
 
     function render() {
-      urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = [];
+      urls = [];
       var m = $("major").value, d = $("degree").value, s = $("semester").value, term = q.value.trim().toLowerCase();
       var rows = papers.filter(function (p) {
         if (m && p.major !== m) return false;
@@ -168,7 +238,7 @@
       }
       list.innerHTML = "";
       rows.forEach(function (p) {
-        var url = URL.createObjectURL(p.blob); urls.push(url);
+        var url = p.url;
         var div = document.createElement("div");
         div.className = "paper";
         div.innerHTML =
@@ -176,17 +246,10 @@
           " · " + esc(p.subject) + " · " + p.year + " · " + (p.size / 1024 < 1024 ? Math.round(p.size / 1024) + " KB" : (p.size / 1048576).toFixed(1) + " MB") + "</small></div>" +
           '<div class="actions"><a class="btn" target="_blank" rel="noopener" href="' + url + '">Open</a>' +
           '<a class="btn alt" download="' + esc(p.fileName) + '" href="' + url + '">Download</a>' +
-          '<button class="danger btn" data-id="' + p.id + '" type="button">Delete</button></div>';
+          '</div>';
         list.appendChild(div);
       });
     }
-
-    list.addEventListener("click", function (e) {
-      var b = e.target.closest("button[data-id]");
-      if (!b) return;
-      if (!confirm("Delete this paper?")) return;
-      deletePaper(parseInt(b.getAttribute("data-id"), 10)).then(load).catch(function (err) { alert("Delete failed: " + err.message); });
-    });
 
     wirePickers({ any: true, onChange: render });
     q.addEventListener("input", render);
