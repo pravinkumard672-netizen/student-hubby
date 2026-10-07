@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Upload a paper — CampusVault</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="upload">
+<header class="bar">
+  <a class="logo" href="index.html">CampusVault</a>
+  <nav><a href="browse.html" >Browse</a><a href="upload.html" class="active">Upload</a></nav>
+</header>
+<main>
+<h2>Upload a paper</h2>
+<form id="uploadForm" novalidate>
+  <label>Major <select id="major" required></select></label>
+  <label>Degree <select id="degree" required></select></label>
+  <label>Semester <select id="semester" required></select></label>
+  <label>Subject <select id="subject" required></select></label>
+  <label>Exam year <input type="number" id="year" required></label>
+  <label>Title (optional) <input type="text" id="title" maxlength="80" placeholder="e.g. End semester exam"></label>
+  <label class="full">File (PDF, JPG, PNG, WebP, max 5 MB)
+    <input type="file" id="file" accept="application/pdf,image/jpeg,image/png,image/webp" required></label>
+  <div class="msg" id="msg" role="status"></div>
+  <div class="full"><button type="submit" id="submitBtn">Upload paper</button></div>
+</form>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

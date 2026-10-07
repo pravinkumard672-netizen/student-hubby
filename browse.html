@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Browse papers — CampusVault</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-page="browse">
+<header class="bar">
+  <a class="logo" href="index.html">CampusVault</a>
+  <nav><a href="browse.html" class="active">Browse</a><a href="upload.html" >Upload</a></nav>
+</header>
+<main>
+<h2>Browse papers</h2>
+<div class="filters">
+  <label>Major <select id="major"></select></label>
+  <label>Degree <select id="degree"></select></label>
+  <label>Semester <select id="semester"></select></label>
+  <label>Search subject or year <input type="search" id="q" placeholder="e.g. DBMS or 2024"></label>
+</div>
+<p class="count" id="count" aria-live="polite"></p>
+<div class="list" id="list"></div>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
